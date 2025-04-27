@@ -1,0 +1,44 @@
+# Entornos virtuales
+.venv/
+venv/
+env/
+ENV/
+
+# Archivos de PyInstaller
+dist/
+build/
+*.spec
+
+# Archivos de caché de Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Archivos de caché de Jupyter
+.ipynb_checkpoints
+
+# Archivos temporales de sistema
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Archivos de bases de datos temporales
+*.db
+*.sqlite3
+
+# Archivos de logs
+*.log
+
+# Archivos de configuración de VSCode
+.vscode/
+
+# Archivos de Excel de ejemplo o temporales
+*.xlsx
+*.xls
+
+# Archivos de usuario de PyQt Designer
+*.ui
+
+# Archivos de configuración de PyCharm
+.idea/

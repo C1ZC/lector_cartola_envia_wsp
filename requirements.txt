@@ -1,0 +1,6 @@
+pandas
+openpyxl
+pywhatkit
+PyQt5
+phonenumbers
+pyinstaller
