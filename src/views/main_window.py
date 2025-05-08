@@ -1,3 +1,4 @@
+import os
 from PyQt5.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QGroupBox, QHBoxLayout, QPushButton, QLabel,
     QTableView, QComboBox, QTextEdit, QCheckBox, QProgressBar, QMessageBox
@@ -7,6 +8,7 @@ from ..models.pandas_model import PandasModel
 from ..models.database import DatabaseManager
 from ..controllers.whatsapp_sender import WhatsAppSenderThread
 from .history_window import HistoryWindow
+from .progress_window import SendProgressDialog
 import os
 
 
@@ -84,34 +86,47 @@ class NostraWhatsApp(QMainWindow):
         # Mensaje
         message_group = QGroupBox("Mensaje personalizado")
         message_layout = QVBoxLayout()
-        message_layout.addWidget(QLabel(
+
+        # Layout for label and save button
+        message_header_layout = QHBoxLayout()
+        message_header_layout.addWidget(QLabel(
             "Variables disponibles: [Razón social], [RUT], [Giro], [Dirección], [Comuna], [Ciudad], [Nombre contacto], [Teléfono]"))
+        self.btn_save_message = QPushButton("Guardar Mensaje")
+        self.btn_save_message.clicked.connect(self.save_message_template)
+        message_header_layout.addWidget(self.btn_save_message)
+        message_header_layout.addStretch() # Push button to the right
+
+        message_layout.addLayout(message_header_layout) # Add the new header layout
+
         self.txt_message = QTextEdit()
         self.txt_message.setPlaceholderText(
             "Escribe tu mensaje aquí usando variables entre corchetes..."
         )
-        self.txt_message.setText(
-            "¡Hola [Nombre contacto]! 👋\n\n"
-            "Te saludamos desde *Nostra SPA* 🏢, la empresa detrás de *https://www.eltecle.cl/* y *https://hidratanos.com/hidratanos.com*.\n\n"
-            "Nos ponemos en contacto con ustedes de *[Razón social]*, ubicada en *[Ciudad]*, para compartir una excelente noticia: "
-            "¡estamos ampliando nuestra línea de productos para ofrecerte más soluciones! 🚀\n\n"
-            "Entre las novedades que pronto estarán disponibles, se incluyen:\n"
-            "• 🛠️ Transpaletas manuales y eléctricas\n"
-            "• ⚡ Generadores\n"
-            "• 🪜 Escaleras industriales\n"
-            "• 🔒 Candados y elementos de seguridad\n\n"
-            "Queremos que seas de los primeros en conocer esta expansión y, como parte de nuestra red de contactos, "
-            "te ofrecemos condiciones preferenciales. 🎉\n\n"
-            "¿Te gustaría recibir nuestro catálogo actualizado con todos los detalles? 📄\n\n"
-            "Quedamos atentos a tu respuesta. 😊\n\n"
-            "Saludos cordiales,\n"
-            "*Equipo de Nostra SPA*"
-        )
+        # Read default message template from file in the current working directory
+        template_file_path = "default_template.txt" # Changed path
+        try:
+            with open(template_file_path, "r", encoding="utf-8") as f:
+                default_message = f.read()
+            self.txt_message.setText(default_message)
+        except FileNotFoundError:
+            print(f"Error: Default template file not found at {template_file_path}")
+            self.txt_message.setPlaceholderText(
+                "Error: Default template file not found. Please enter your message here."
+            )
+        except Exception as e:
+            print(f"Error reading default template file: {e}")
+            self.txt_message.setPlaceholderText(
+                f"Error reading template file: {e}. Please enter your message here."
+            )
+
         message_layout.addWidget(self.txt_message)
         message_group.setLayout(message_layout)
         main_layout.addWidget(message_group)
 
-        # Opciones de envío
+
+        # Opciones de envío y Botón Iniciar Envío en la misma fila
+        send_area_layout = QHBoxLayout()
+
         send_options_group = QGroupBox("Opciones de envío")
         send_options_layout = QHBoxLayout()
         self.chk_test_mode = QCheckBox(
@@ -124,34 +139,27 @@ class NostraWhatsApp(QMainWindow):
         send_options_layout.addWidget(self.chk_avoid_resend)
         send_options_layout.addStretch()
         send_options_group.setLayout(send_options_layout)
-        main_layout.addWidget(send_options_group)
 
-        # Progreso y envío
-        progress_group = QGroupBox("Envío y progreso")
-        progress_layout = QVBoxLayout()
-        send_layout = QHBoxLayout()
         self.btn_send = QPushButton("Iniciar Envío")
         self.btn_send.setMinimumHeight(40)
         self.btn_send.clicked.connect(self.start_sending)
         self.btn_send.setEnabled(False)
-        self.btn_stop = QPushButton("Detener Envío")
-        self.btn_stop.setMinimumHeight(40)
-        self.btn_stop.clicked.connect(self.stop_sending)
-        self.btn_stop.setEnabled(False)
-        send_layout.addWidget(self.btn_send)
-        send_layout.addWidget(self.btn_stop)
-        progress_layout.addLayout(send_layout)
-        progress_stats_layout = QHBoxLayout()
-        self.lbl_progress = QLabel("Progreso: 0/0")
-        progress_stats_layout.addWidget(self.lbl_progress)
-        progress_stats_layout.addStretch()
-        self.lbl_status = QLabel("Listo")
-        progress_stats_layout.addWidget(self.lbl_status)
-        progress_layout.addLayout(progress_stats_layout)
-        self.progress_bar = QProgressBar()
-        progress_layout.addWidget(self.progress_bar)
-        progress_group.setLayout(progress_layout)
-        main_layout.addWidget(progress_group)
+
+        send_area_layout.addWidget(send_options_group)
+        send_area_layout.addWidget(self.btn_send)
+        send_area_layout.addStretch() # Push options and button to the left
+
+        main_layout.addLayout(send_area_layout)
+
+        # Pie de página para el estado/contacto
+        footer_layout = QHBoxLayout()
+        self.lbl_status = QLabel("c1zc developer Contact: camilo.zavala.c@gmail.com")
+        footer_layout.addStretch() # Add stretch before the label
+        footer_layout.addWidget(self.lbl_status)
+        footer_layout.addStretch() # Add stretch after the label
+
+        main_layout.addLayout(footer_layout)
+
 
     def load_data_from_db(self):
         try:
@@ -248,37 +256,48 @@ class NostraWhatsApp(QMainWindow):
             QMessageBox.warning(
                 self, "Error", "No hay contactos seleccionados para enviar")
             return
+
         message_template = self.txt_message.toPlainText()
         if not message_template:
             QMessageBox.warning(self, "Error", "Debe ingresar un mensaje")
             return
+
+        # Add confirmation dialog here
         reply = QMessageBox.question(
             self,
             "Confirmar envío",
-            "¿Ha iniciado sesión en WhatsApp Web y está listo para enviar los mensajes?",
+            "¿Ha iniciado sesión en WhatsApp Web en Google Chrome y está listo para enviar los mensajes?",
             QMessageBox.Yes | QMessageBox.No,
             QMessageBox.No
         )
+
         if reply == QMessageBox.No:
             QMessageBox.information(
                 self,
                 "Información",
-                "Primero debe iniciar sesión en WhatsApp Web antes de continuar.\n"
-                "1. Abra Google Chrome\n"
-                "2. Navegue a web.whatsapp.com\n"
-                "3. Escanee el código QR con su teléfono\n"
-                "4. Una vez logueado, regrese e intente nuevamente."
+                "Para enviar mensajes, primero debe iniciar sesión en WhatsApp Web en Google Chrome.\n\n"
+                "Pasos:\n"
+                "1. Abra Google Chrome.\n"
+                "2. Navegue a web.whatsapp.com.\n"
+                "3. Escanee el código QR con su teléfono.\n"
+                "4. Una vez logueado, regrese a esta aplicación e intente nuevamente."
             )
-            return
+            return # Stop the sending process if user is not ready
+
+        # Crear y mostrar ventana de progreso
+        self.progress_dialog = SendProgressDialog(self)
+        self.progress_dialog.stop_requested.connect(self.stop_sending)
+        self.progress_dialog.show()
+
+        # Configurar interfaz (deshabilitar controles principales)
         self.btn_send.setEnabled(False)
-        self.btn_stop.setEnabled(True)
         self.btn_load_excel.setEnabled(False)
         self.cmb_cities.setEnabled(False)
         self.cmb_communes.setEnabled(False)
         self.cmb_giros.setEnabled(False)
-        total = 1 if self.chk_test_mode.isChecked() else len(self.df_filtered)
-        self.progress_bar.setMaximum(total)
-        self.progress_bar.setValue(0)
+        # The stop button is part of the progress dialog, so no need to enable it here
+
+        # Iniciar hilo de envío
         self.sender_thread = WhatsAppSenderThread(
             self.df_filtered,
             message_template,
@@ -286,63 +305,69 @@ class NostraWhatsApp(QMainWindow):
             test_mode=self.chk_test_mode.isChecked(),
             check_history=self.chk_avoid_resend.isChecked()
         )
-        self.sender_thread.progress_update.connect(self.update_progress)
-        self.sender_thread.message_sent.connect(self.register_sent_message)
+
+        # Conectar señales
+        self.sender_thread.progress_update.connect(self.progress_dialog.update_progress)
+        self.sender_thread.message_sent.connect(self.register_sent_message) # This slot is empty
         self.sender_thread.finished_sending.connect(self.sending_finished)
+        self.sender_thread.log_message.connect(self.progress_dialog.add_log_entry)
+
         self.sender_thread.start()
-        self.lbl_status.setText("Enviando mensajes...")
+
+        # Update status label (optional, progress dialog shows detailed status)
+        self.lbl_status.setText("Iniciando envío...")
+
 
     def stop_sending(self):
         if self.sender_thread and self.sender_thread.isRunning():
-            reply = QMessageBox.question(
-                self,
-                "Confirmar detención",
-                "¿Está seguro de que desea detener el envío de mensajes?",
-                QMessageBox.Yes | QMessageBox.No,
-                QMessageBox.No
-            )
-            if reply == QMessageBox.Yes:
-                self.lbl_status.setText("Deteniendo envío...")
-                self.sender_thread.stop()
-
-    def update_progress(self, current, total):
-        self.progress_bar.setValue(current)
-        self.lbl_progress.setText(f"Progreso: {current}/{total}")
+            self.sender_thread.stop()
 
     def register_sent_message(self, razon_social, telefono, ciudad, success):
-        if success:
-            self.lbl_status.setText(f"Último envío: {razon_social} - Éxito")
-        else:
-            self.lbl_status.setText(f"Último envío: {razon_social} - Error")
+        # This slot is connected but currently does nothing.
+        # The progress dialog handles logging and the DB manager records the history.
+        pass
 
     def sending_finished(self):
         try:
-            history_df = self.db_manager.get_message_history(limit=100)
-            total_sent = len(history_df)
-            successful = len(history_df[history_df['resultado'] == 'Éxito'])
-            if total_sent > 0:
-                QMessageBox.information(
-                    self,
-                    "Envío completado",
-                    f"Envío completado.\n\n"
-                    f"Total intentos: {total_sent}\n"
-                    f"Enviados con éxito: {successful}\n"
-                    f"Fallidos: {total_sent - successful}\n\n"
-                    f"El historial completo se guarda automáticamente en la base de datos"
-                )
+            # Fetch history to show summary. Limit to a reasonable number for the summary.
+            # The full history is in the DB and viewable via the history window.
+            history_df = self.db_manager.get_message_history(limit=500) # Increased limit for summary
+            # Filter for the current sending session if possible, or just show overall stats
+            # For simplicity, showing overall stats from recent history
+            total_attempts = len(history_df) # This is not accurate for the current session only
+            successful_sends = len(history_df[history_df['resultado'] == 'Éxito']) # Also not accurate for current session only
+
+            # A more accurate summary would require tracking results within the thread
+            # and passing them back, or querying history specifically for the last session.
+            # For now, let's provide a general message and direct to history window.
+
+            QMessageBox.information(
+                self,
+                "Envío completado",
+                "El proceso de envío ha finalizado.\n"
+                "Por favor, revise el log en la ventana de progreso para detalles.\n"
+                "El historial completo se guarda automáticamente en la base de datos y puede verlo en la ventana 'Ver Historial de Envíos'.\"\n\n"
+                "c1zc developer Contact: camilo.zavala.c@gmail.com" # Added contact info here too
+            )
+
         except Exception as e:
             QMessageBox.warning(
                 self,
-                "Error al consultar historial",
-                f"No se pudo obtener el resumen de envío: {str(e)}"
+                "Error al finalizar envío",
+                f"El proceso de envío ha finalizado, pero ocurrió un error al obtener el resumen: {str(e)}\n"
+                "Por favor, revise el log en la ventana de progreso para detalles.\"\n\n"
+                "c1zc developer Contact: camilo.zavala.c@gmail.com" # Added contact info here too
             )
+
+        # Re-enable controls
         self.btn_send.setEnabled(True)
-        self.btn_stop.setEnabled(False)
         self.btn_load_excel.setEnabled(True)
         self.cmb_cities.setEnabled(True)
         self.cmb_communes.setEnabled(True)
         self.cmb_giros.setEnabled(True)
-        self.lbl_status.setText("Listo")
+        # Reset status label to the contact info after sending finishes
+        self.lbl_status.setText("c1zc developer Contact: camilo.zavala.c@gmail.com")
+
 
     def city_filter_selected(self):
         if self.cmb_cities.currentIndex() > 0:
@@ -370,3 +395,15 @@ class NostraWhatsApp(QMainWindow):
             self.cmb_cities.setEnabled(True)
             self.cmb_communes.setEnabled(True)
         self.filter_data()
+
+    def save_message_template(self):
+        template_file_path = "default_template.txt" # Changed path
+        message_content = self.txt_message.toPlainText()
+        try:
+            # Ensure the directory exists (not strictly needed for current dir, but good practice)
+            # os.makedirs(os.path.dirname(template_file_path), exist_ok=True) # Not needed for current dir
+            with open(template_file_path, "w", encoding="utf-8") as f:
+                f.write(message_content)
+            QMessageBox.information(self, "Guardado Exitoso", "El mensaje ha sido guardado en default_template.txt")
+        except Exception as e:
+            QMessageBox.critical(self, "Error al Guardar", f"No se pudo guardar el mensaje: {str(e)}")

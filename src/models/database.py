@@ -1,5 +1,6 @@
 import sqlite3
 import pandas as pd
+from PyQt5.QtWidgets import QMessageBox
 
 class DatabaseManager:
     def __init__(self, db_file="nostra_whatsapp.db"):
@@ -148,11 +149,54 @@ class DatabaseManager:
     def get_message_history(self, limit=100):
         conn = self.get_connection()
         query = '''
-        SELECT fecha_hora, razon_social, telefono, ciudad, resultado
+        SELECT id, fecha_hora, razon_social, telefono, ciudad, resultado
         FROM historial_envios
         ORDER BY fecha_hora DESC
         LIMIT ?
         '''
         df = pd.read_sql_query(query, conn, params=[limit])
         conn.close()
+        print(f"DatabaseManager: get_message_history returning {len(df)} records.") # Added print
         return df
+
+
+
+    def on_click_delete_history(self):
+        # Get selected records IDs (you'll need to implement this)
+        ids = self.collect_ids()  # You'll need to implement collect_ids()
+        if ids:
+            self.delete_history_records(ids)
+
+    # File src/models/database.py
+
+    def delete_history_records(self, record_ids):
+        try:
+            # Conectamos a la base de datos
+            # Reemplaza con tu ruta o variable de conexión
+            conn = sqlite3.connect('nostra_whatsapp.db')
+            cursor = conn.cursor()
+
+            # Convertimos los IDs a enteros para la consulta SQL
+            ids = [int(id) for id in record_ids]
+            
+            placeholders = ','.join('?' for _ in ids)
+            delete_query = f'DELETE FROM historial_envios WHERE id IN ({placeholders})'
+            cursor.execute(delete_query, ids)
+
+            conn.commit()
+            print(f"DatabaseManager: Committed deletion of {len(ids)} records.")
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Error al eliminar registros: {str(e)}")
+            raise
+        finally:
+            conn.close()
+
+
+    def on_click_delete_history(self):
+        try:
+            ids = self.collect_ids()  # Debug print to verify IDs collected
+            if ids:
+                self.delete_history_records(ids)
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Error en el método on_click_delete_history: {str(e)}")
+            raise
